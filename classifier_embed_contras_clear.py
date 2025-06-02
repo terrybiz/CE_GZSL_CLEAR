@@ -51,27 +51,6 @@ class CLASSIFIER:
         else:
             self.acc = self.fit_zsl()
     
-    def fit_zsl(self):
-        best_acc = 0
-        mean_loss = 0
-        for epoch in range(self.nepoch):
-            for i in range(0, self.ntrain, self.batch_size):      
-                self.model.zero_grad()
-                batch_input, batch_label = self.next_batch(self.batch_size) 
-                self.input.copy_(batch_input)
-                self.label.copy_(batch_label)
-                   
-                embed, _=self.MapNet(self.input)
-                output = self.model(embed)
-                loss = self.criterion(output, self.label)
-                mean_loss += loss.data
-                loss.backward()
-                self.optimizer.step()
-            acc = self.val(self.test_unseen_feature, self.test_unseen_label, self.unseenclasses)
-            if acc > best_acc:
-                best_acc = acc
-        print('Training classifier loss= %.4f' % (loss))
-        return best_acc 
 
     def fit(self):
         best_H = 0
@@ -167,32 +146,7 @@ class CLASSIFIER:
         acc_per_class /= target_classes.size(0)
         return acc_per_class 
 
-    # test_label is integer 
-    def val(self, test_X, test_label, target_classes): 
-        start = 0
-        ntest = test_X.size()[0]
-        predicted_label = torch.LongTensor(test_label.size())
-        for i in range(0, ntest, self.batch_size):
-            end = min(ntest, start+self.batch_size)
-            with torch.no_grad():
-                if self.cuda:
-                    embed, _ = self.MapNet(test_X[start:end].cuda())
-                    output = self.model(embed)
-                else:
-                    embed, _ = self.MapNet(test_X[start:end])
-                    output = self.model(embed)
-            _, predicted_label[start:end] = torch.max(output, 1)
-            start = end
 
-        acc = self.compute_per_class_acc(util.map_label(test_label, target_classes), predicted_label, target_classes.size(0))
-        return acc
-
-    def compute_per_class_acc(self, test_label, predicted_label, nclass):
-        acc_per_class = torch.FloatTensor(nclass).fill_(0)
-        for i in range(nclass):
-            idx = (test_label == i)
-            acc_per_class[i] = float(torch.sum(test_label[idx]==predicted_label[idx])) / float(torch.sum(idx))
-        return acc_per_class.mean() 
 
 class LINEAR_LOGSOFTMAX(nn.Module):
     def __init__(self, input_dim, nclass):
