@@ -185,20 +185,6 @@ def class_scores_for_loop(embed, input_label, relation_net):
     cls_loss = -((mask * log_scores).sum(1) / mask.sum(1)).mean()
     return cls_loss
 
-# It is much faster to use the matrix, but it cost much GPU memory.
-def class_scores_in_matrix(embed, input_label, relation_net):
-    expand_embed = embed.unsqueeze(dim=1).repeat(1, opt.nclass_seen, 1).reshape(embed.shape[0] * opt.nclass_seen, -1)
-    expand_att = data.attribute_seen.unsqueeze(dim=0).repeat(embed.shape[0], 1, 1).reshape(
-        embed.shape[0] * opt.nclass_seen, -1).cuda()
-    all_scores = torch.div(relation_net(torch.cat((expand_embed, expand_att), dim=1)),opt.cls_temp).reshape(embed.shape[0],
-                                                                                                    opt.nclass_seen)
-    score_max, _ = torch.max(all_scores, dim=1, keepdim=True)
-    scores_norm = all_scores - score_max.detach()
-    mask = F.one_hot(input_label, num_classes=opt.nclass_seen).float().cuda()
-    exp_scores = torch.exp(scores_norm)
-    log_scores = scores_norm - torch.log(exp_scores.sum(1, keepdim=True))
-    cls_loss = -((mask * log_scores).sum(1) / mask.sum(1)).mean()
-    return cls_loss
 
 
 for epoch in range(opt.nepoch):
@@ -301,26 +287,16 @@ for epoch in range(opt.nepoch):
     for p in netMap.parameters():  # reset requires_grad
         p.requires_grad = False
 
-    if opt.gzsl: # Generalized zero-shot learning
-        syn_feature, syn_label = generate_syn_feature(netG, data.unseenclasses, data.attribute, opt.syn_num)
-        train_X = torch.cat((data.train_feature, syn_feature), 0)
-        train_Y = torch.cat((data.train_label, syn_label), 0)
+    syn_feature, syn_label = generate_syn_feature(netG, data.unseenclasses, data.attribute, opt.syn_num)
+    train_X = torch.cat((data.train_feature, syn_feature), 0)
+    train_Y = torch.cat((data.train_label, syn_label), 0)
 
-        nclass = opt.nclass_all
-        cls = classifier_embed_contras.CLASSIFIER(train_X, train_Y, netMap, opt.embedSize, data, nclass, opt.cuda,
-                                                  opt.classifier_lr, 0.5, 25, opt.syn_num,
-                                                  True)
-        print('unseen=%.4f, seen=%.4f, h=%.4f' % (cls.acc_unseen, cls.acc_seen, cls.H))
+    nclass = opt.nclass_all
+    cls = classifier_embed_contras.CLASSIFIER(train_X, train_Y, netMap, opt.embedSize, data, nclass, opt.cuda,
+                                             opt.classifier_lr, 0.5, 25, opt.syn_num,
+                                             True)
+    print('unseen=%.4f, seen=%.4f, h=%.4f' % (cls.acc_unseen, cls.acc_seen, cls.H))
 
-    else:  # conventional zero-shot learning
-        syn_feature, syn_label = generate_syn_feature(netG, data.unseenclasses, data.attribute, opt.syn_num)
-        cls = classifier_embed_contras.CLASSIFIER(syn_feature, util.map_label(syn_label, data.unseenclasses), netMap,
-                                                  opt.embedSize, data,
-                                                  data.unseenclasses.size(0), opt.cuda, opt.classifier_lr, 0.5, 100,
-                                                  opt.syn_num,
-                                                  False)
-        acc = cls.acc
-        print('unseen class accuracy=%.4f '%acc)
 
 
     # reset G to training mode
