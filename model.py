@@ -77,4 +77,3 @@ class Dis_Embed_Att(nn.Module):
         h = self.lrelu(self.fc1(input))
         h = self.fc2(h)
         return h
-
